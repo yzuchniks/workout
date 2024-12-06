@@ -20,6 +20,17 @@ async def fetch_url(session: aiohttp.ClientSession, url: str) -> Dict:
             }
 
 
+def package_generator(collection, size):
+    batch = []
+    for item in collection:
+        batch.append(item)
+        if len(batch) >= size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
 async def fetch_urls(urls: List[str], file_path: str):
     semaphore = asyncio.Semaphore(5)
 
@@ -28,11 +39,12 @@ async def fetch_urls(urls: List[str], file_path: str):
             return await fetch_url(session, url)
 
     async with aiohttp.ClientSession() as session:
-        tasks = [fetch_with_limit(url) for url in urls]
-        for task in asyncio.as_completed(tasks):
-            result = await task
-            with open(file_path, 'a') as file:
-                file.write(json.dumps(result) + '\n')
+        with open(file_path, 'a') as file:
+            for package in package_generator(urls, 100):
+                tasks = [fetch_with_limit(url) for url in package]
+                for task in asyncio.as_completed(tasks):
+                    result = await task
+                    file.write(json.dumps(result) + '\n')
 
     print(f'Результаты записаны в файл {file_path}')
 
