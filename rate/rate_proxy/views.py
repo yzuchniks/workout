@@ -2,7 +2,7 @@ import httpx
 from django.http import JsonResponse
 from django.views import View
 
-API_URL = "https://api.exchangerate-api.com/v4/latest/{currency}"
+API_URL = 'https://api.exchangerate-api.com/v4/latest/{currency}'
 
 
 class CurrencyRateView(View):
