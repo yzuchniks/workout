@@ -21,30 +21,56 @@ async def fetch_url(session: aiohttp.ClientSession, url: str) -> Dict:
 
 
 def package_generator(collection, size):
-    batch = []
+    package = []
     for item in collection:
-        batch.append(item)
-        if len(batch) >= size:
-            yield batch
-            batch = []
-    if batch:
-        yield batch
+        package.append(item)
+        if len(package) >= size:
+            yield package
+            package = []
+    if package:
+        yield package
 
 
-async def fetch_urls(urls: List[str], file_path: str):
-    semaphore = asyncio.Semaphore(5)
+async def worker(
+    queue: asyncio.Queue,
+    session: aiohttp.ClientSession,
+    file_path: str
+):
+    with open(file_path, 'a') as file:
+        while True:
+            url = await queue.get()
+            if url is None:
+                break
+            result = await fetch_url(session, url)
+            file.write(json.dumps(result) + '\n')
+            queue.task_done()
 
-    async def fetch_with_limit(url):
-        async with semaphore:
-            return await fetch_url(session, url)
+
+async def tasks_producer(
+    queue: asyncio.Queue, urls: List[str], package_size: int
+):
+    for package in package_generator(urls, package_size):
+        for url in package:
+            await queue.put(url)
+
+
+async def fetch_urls(urls: List[str], file_path: str, package_size: int = 100):
+    queue: asyncio.Queue = asyncio.Queue()
 
     async with aiohttp.ClientSession() as session:
-        with open(file_path, 'a') as file:
-            for package in package_generator(urls, 100):
-                tasks = [fetch_with_limit(url) for url in package]
-                for task in asyncio.as_completed(tasks):
-                    result = await task
-                    file.write(json.dumps(result) + '\n')
+        num_workers = 5
+        workers = [
+            asyncio.create_task(
+                worker(queue, session, file_path)
+            ) for _ in range(num_workers)
+        ]
+
+        await tasks_producer(queue, urls, package_size)
+
+        for _ in range(num_workers):
+            await queue.put(None)
+
+        await asyncio.gather(*workers)
 
     print(f'Результаты записаны в файл {file_path}')
 
