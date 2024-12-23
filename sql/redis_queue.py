@@ -4,14 +4,8 @@ import json
 
 
 class RedisQueue:
-    def __init__(
-            self,
-            queue_name: str,
-            host: str = 'localhost',
-            port: int = 6379,
-            db: int = 0
-    ):
-        self.redis = redis.StrictRedis(host=host, port=port, db=db)
+    def __init__(self, queue_name):
+        self.redis = redis.StrictRedis(host='localhost', port=6379, db=0)
         self.queue_name = queue_name
 
     def publish(self, msg: dict):
